@@ -52,7 +52,7 @@ cp skills/xinyang-assistant/SKILL.md ~/.codex/skills/xinyang-assistant/SKILL.md
       "type": "local",
       "command": ["npx", "tsx", "/path/to/mcp/src/index.ts"],
       "enabled": true,
-      "env": {
+      "environment": {
         "SEARCH_API_URL": "http://10.24.116.22:5010/search/dify",
         "API_SERVER_BASE_URL": "http://10.24.116.22:5010",
         "no_proxy": "10.24.116.22,59.77.39.46,localhost,127.0.0.1,::1"

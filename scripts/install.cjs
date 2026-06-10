@@ -184,7 +184,7 @@ if (!SKIP_OPENCODE) {
       type: "local",
       command: ["npx", "tsx", SOURCE_FILE],
       enabled: true,
-      env: {
+      environment: {
         SEARCH_API_URL: API_URL,
         API_SERVER_BASE_URL: API_BASE,
         no_proxy: NO_PROXY,

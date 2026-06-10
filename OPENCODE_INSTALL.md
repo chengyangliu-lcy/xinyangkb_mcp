@@ -24,7 +24,7 @@ node scripts/install.cjs
       "type": "local",
       "command": ["npx", "tsx", "/absolute/path/to/src/index.ts"],
       "enabled": true,
-      "env": {
+      "environment": {
         "SEARCH_API_URL": "http://10.24.116.22:5010/search/dify",
         "API_SERVER_BASE_URL": "http://10.24.116.22:5010",
         "no_proxy": "10.24.116.22,59.77.39.46,localhost,127.0.0.1,::1"
