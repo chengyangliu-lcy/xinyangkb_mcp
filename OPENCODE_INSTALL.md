@@ -14,7 +14,7 @@ node scripts/install.cjs
 
 ## 手动安装
 
-编辑全局配置 `~/.config/opencode/opencode.json`（Linux）或 `%APPDATA%\opencode\opencode.json`（Windows）：
+编辑全局配置 `~/.config/opencode/opencode.json`（Linux / Windows 均为该路径）：
 
 ```json
 {

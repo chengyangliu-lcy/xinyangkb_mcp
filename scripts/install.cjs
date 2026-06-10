@@ -160,12 +160,9 @@ if (!SKIP_OPENCODE) {
     console.log("[3/4] Installing for OpenCode...");
 
     // Determine config path
-    let configDir;
-    if (IS_WIN) {
-      configDir = path.join(process.env.APPDATA || "", "opencode");
-    } else {
-      configDir = path.join(os.homedir(), ".config", "opencode");
-    }
+    // OpenCode reads from ~/.config/opencode/opencode.json on all platforms
+    // Windows: %USERPROFILE%\.config\opencode\opencode.json
+    const configDir = path.join(os.homedir(), ".config", "opencode");
     const configFile = path.join(configDir, "opencode.json");
 
     // Read or create config
