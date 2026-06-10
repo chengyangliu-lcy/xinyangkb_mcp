@@ -1,0 +1,23 @@
+{
+  "name": "xinyang-kb",
+  "version": "1.0.0",
+  "description": "芯阳公司内部知识库 MCP 服务器。提供知识库搜索能力，Codex 可借此查询芯阳内部文档、产品规格、技术方案、公司制度等内部信息。",
+  "author": {
+    "name": "芯阳公司"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Xinyang KB",
+    "shortDescription": "芯阳内部知识库搜索",
+    "longDescription": "芯阳公司内部知识库 MCP 服务器。包含 knowledge_base_search 工具（搜索内部文档库）和芯阳大模型技能（规范回答格式、来源标注、脱敏规则等）。",
+    "developerName": "芯阳公司",
+    "category": "Productivity",
+    "capabilities": ["Read"],
+    "defaultPrompt": [
+      "查询 TM52F1376 的规格参数",
+      "查一下公司内部关于离职流程的文件",
+      "搜索芯阳内部文档中关于 XXX 的信息并结构化呈现"
+    ]
+  }
+}
