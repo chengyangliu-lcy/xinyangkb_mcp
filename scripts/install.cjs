@@ -1,251 +1,318 @@
 #!/usr/bin/env node
-/**
- * Xinyang KB MCP Server - Cross-platform installer
- * Supports Linux and Windows, auto-detects Codex and/or OpenCode.
- *
- * Usage:
- *   node scripts/install.js
- *   node scripts/install.js --api-url http://new-ip:5010/search/dify
- *   node scripts/install.js --no-codex --no-opencode (dry-run env check)
- */
 
 const fs = require("fs");
-const path = require("path");
-const { execSync } = require("child_process");
 const os = require("os");
+const path = require("path");
+const { spawnSync } = require("child_process");
 
 const args = process.argv.slice(2);
-const API_URL =
-  getArg("--api-url") || "http://10.24.116.22:5010/search/dify";
-const API_BASE = getArg("--api-base") || API_URL.replace("/search/dify", "");
-const NO_PROXY = "10.24.116.22,59.77.39.46,localhost,127.0.0.1,::1";
-
 const PROJECT_DIR = path.resolve(__dirname, "..");
-const SOURCE_FILE = path.join(PROJECT_DIR, "src", "index.ts");
+const PLUGIN_DIR = path.join(PROJECT_DIR, "plugins", "xinyang-kb");
+const BUNDLE_FILE = path.join(PLUGIN_DIR, "dist", "index.js");
 const SKILL_SRC = path.join(
-  PROJECT_DIR,
+  PLUGIN_DIR,
   "skills",
   "xinyang-assistant",
   "SKILL.md"
 );
-const IS_WIN = os.platform() === "win32";
+const IS_WIN = process.platform === "win32";
 
 function getArg(name) {
-  const idx = args.indexOf(name);
-  if (idx !== -1 && idx < args.length - 1) return args[idx + 1];
-  const eq = args.find((a) => a.startsWith(name + "="));
-  if (eq) return eq.slice(name.length + 1);
-  return null;
+  const index = args.indexOf(name);
+  if (index !== -1 && index < args.length - 1) return args[index + 1];
+  const equalsArg = args.find((arg) => arg.startsWith(`${name}=`));
+  return equalsArg ? equalsArg.slice(name.length + 1) : null;
 }
 
 function hasFlag(name) {
   return args.includes(name);
 }
 
-const SKIP_CODEX = hasFlag("--no-codex");
-const SKIP_OPENCODE = hasFlag("--no-opencode");
+function usage() {
+  console.log(`
+Usage:
+  node scripts/install.cjs --api-url <URL> [options]
 
-// ---------------------------------------------------------------------------
-// Utilities
-// ---------------------------------------------------------------------------
-
-function run(cmd, opts = {}) {
-  console.log(`  $ ${cmd}`);
-  try {
-    return execSync(cmd, {
-      stdio: "pipe",
-      encoding: "utf-8",
-      ...opts,
-    }).trim();
-  } catch (e) {
-    if (opts.ignoreError) return "";
-    throw e;
-  }
+Options:
+  --api-base <URL>            API base URL. Required unless --api-url ends in /search/dify.
+  --no-proxy <hosts>          Optional no_proxy value.
+  --codex-mode <mode>         direct, plugin, or both (default: direct).
+  --no-codex                  Skip Codex installation.
+  --no-opencode               Skip OpenCode installation.
+  --help                      Show this help.
+`);
 }
 
-function which(cmd) {
-  if (IS_WIN) {
-    try {
-      return run(`where ${cmd}`, { ignoreError: true });
-    } catch {
-      return "";
-    }
-  }
-  try {
-    return run(`which ${cmd}`, { ignoreError: true });
-  } catch {
-    return "";
-  }
-}
-
-function print(label, msg) {
-  console.log(`  ${label} ${msg}`);
-}
-
-function quotePath(p) {
-  return IS_WIN ? `"${p}"` : p;
-}
-
-// ---------------------------------------------------------------------------
-// Step 1: Check npm dependencies
-// ---------------------------------------------------------------------------
-
-console.log("");
-console.log("========================================");
-console.log(" Xinyang KB MCP Server - Installer");
-console.log("========================================");
-console.log(`  Platform: ${os.platform()} ${os.release()}`);
-console.log(`  Project:  ${PROJECT_DIR}`);
-console.log("");
-
-console.log("[1/4] Checking dependencies...");
-if (!fs.existsSync(path.join(PROJECT_DIR, "node_modules"))) {
-  console.log("  Installing npm packages...");
-  run("npm install", { cwd: PROJECT_DIR });
-  print("OK", "npm dependencies installed");
-} else {
-  print("OK", "npm dependencies already installed");
-}
-
-// ---------------------------------------------------------------------------
-// Step 2: Install for Codex CLI
-// ---------------------------------------------------------------------------
-
-let hasCodex = false;
-if (!SKIP_CODEX) {
-  const codexBin = which("codex");
-  hasCodex = !!codexBin;
-  if (hasCodex) {
-    console.log("");
-    console.log("[2/4] Installing for Codex CLI...");
-
-    // Remove existing config first
-    run(`codex mcp remove xinyang-kb`, { ignoreError: true });
-
-    const envFlags = [
-      `SEARCH_API_URL=${API_URL}`,
-      `API_SERVER_BASE_URL=${API_BASE}`,
-      `no_proxy=${NO_PROXY}`,
-    ]
-      .map((e) => `--env "${e}"`)
-      .join(" ");
-
-    const cmd = `codex mcp add xinyang-kb ${envFlags} -- npx tsx ${quotePath(SOURCE_FILE)}`;
-    run(cmd, { cwd: PROJECT_DIR });
-    print("OK", "Codex MCP server registered");
-
-    // Install skill
-    const skillDir = path.join(os.homedir(), ".codex", "skills", "xinyang-assistant");
-    fs.mkdirSync(skillDir, { recursive: true });
-    fs.copyFileSync(SKILL_SRC, path.join(skillDir, "SKILL.md"));
-    print("OK", `Skill installed to ${skillDir}`);
-  } else {
-    print("SKIP", "Codex CLI not found");
-  }
-} else {
-  console.log("");
-  console.log("[2/4] Skipping Codex (--no-codex)");
-}
-
-// ---------------------------------------------------------------------------
-// Step 3: Install for OpenCode
-// ---------------------------------------------------------------------------
-
-let hasOpenCode = false;
-if (!SKIP_OPENCODE) {
-  const opencodeBin = which("opencode");
-  hasOpenCode = !!opencodeBin;
-  if (hasOpenCode) {
-    console.log("");
-    console.log("[3/4] Installing for OpenCode...");
-
-    // Determine config path
-    // OpenCode reads from ~/.config/opencode/opencode.json on all platforms
-    // Windows: %USERPROFILE%\.config\opencode\opencode.json
-    const configDir = path.join(os.homedir(), ".config", "opencode");
-    const configFile = path.join(configDir, "opencode.json");
-
-    // Read or create config
-    let config = { $schema: "https://opencode.ai/config.json", mcp: {} };
-    if (fs.existsSync(configFile)) {
-      try {
-        config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
-      } catch {
-        console.warn("  Warning: existing config is invalid JSON, overwriting");
-        config = { $schema: "https://opencode.ai/config.json", mcp: {} };
-      }
-    }
-    if (!config.mcp) config.mcp = {};
-
-    config.mcp["xinyang-kb"] = {
-      type: "local",
-      command: ["npx", "tsx", SOURCE_FILE],
-      enabled: true,
-      environment: {
-        SEARCH_API_URL: API_URL,
-        API_SERVER_BASE_URL: API_BASE,
-        no_proxy: NO_PROXY,
-      },
-    };
-
-    fs.mkdirSync(configDir, { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify(config, null, 2) + "\n");
-    print("OK", `OpenCode config updated: ${configFile}`);
-
-    // Install instructions
-    const instructionDir = path.join(configDir, "skills");
-    fs.mkdirSync(instructionDir, { recursive: true });
-    fs.copyFileSync(
-      SKILL_SRC,
-      path.join(instructionDir, "xinyang-assistant.md")
-    );
-    print("OK", `Skill installed to ${instructionDir}/xinyang-assistant.md`);
-
-    // Add instruction reference to config (if not already present)
-    const instrPath = path.join("skills", "xinyang-assistant.md");
-    if (!config.instructions) config.instructions = [];
-    if (!config.instructions.includes(instrPath)) {
-      config.instructions.push(instrPath);
-      fs.writeFileSync(configFile, JSON.stringify(config, null, 2) + "\n");
-      print("OK", `Instruction reference added to config`);
-    }
-  } else {
-    print("SKIP", "OpenCode not found");
-  }
-} else {
-  console.log("");
-  console.log("[3/4] Skipping OpenCode (--no-opencode)");
-}
-
-// ---------------------------------------------------------------------------
-// Step 4: Summary
-// ---------------------------------------------------------------------------
-
-console.log("");
-console.log("[4/4] Summary");
-console.log("");
-
-if (!hasCodex && !hasOpenCode) {
-  console.log("  Neither Codex nor OpenCode was detected.");
-  console.log("  Install one of them first, then re-run this script.");
-  console.log("");
-  if (IS_WIN) {
-    console.log("  Manual installation:");
-    console.log("  Codex:  codex mcp add xinyang-kb ...");
-    console.log("  OpenCode: Add mcp config to your opencode.json");
-  }
+function fail(message) {
+  console.error(`Error: ${message}`);
   process.exit(1);
 }
 
-console.log("  Installation complete!");
-console.log("");
-console.log("  Restart your AI assistant to pick up the changes.");
-console.log("");
+function run(command, commandArgs, options = {}) {
+  console.log(`  $ ${command} ${commandArgs.join(" ")}`);
+  const resolved = resolveCommand(command);
+  if (!resolved) {
+    if (options.allowFailure) return "";
+    fail(`command not found: ${command}`);
+  }
+  const result = spawnSync(resolved.command, [
+    ...resolved.prefixArgs,
+    ...commandArgs,
+  ], {
+    cwd: options.cwd ?? PROJECT_DIR,
+    encoding: "utf8",
+    stdio: options.capture ? "pipe" : "inherit",
+  });
+  if (result.error && !options.allowFailure) throw result.error;
+  if (result.status !== 0 && !options.allowFailure) {
+    fail(`${command} exited with status ${result.status}`);
+  }
+  return options.capture
+    ? `${result.stdout ?? ""}${result.stderr ?? ""}`.trim()
+    : "";
+}
 
-if (hasCodex) {
-  console.log("  Codex:  codex mcp list");
+function resolveCommand(command) {
+  const probe = spawnSync(IS_WIN ? "where.exe" : "which", [command], {
+    encoding: "utf8",
+  });
+  if (probe.status !== 0) return null;
+  const candidates = probe.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!IS_WIN) {
+    return candidates[0]
+      ? { command: candidates[0], prefixArgs: [] }
+      : null;
+  }
+
+  const nativeExecutable = candidates.find((candidate) =>
+    /\.(exe|com)$/i.test(candidate)
+  );
+  if (nativeExecutable) {
+    return { command: nativeExecutable, prefixArgs: [] };
+  }
+
+  const cmdShim = candidates.find((candidate) => /\.cmd$/i.test(candidate));
+  if (!cmdShim) return null;
+
+  const shim = fs.readFileSync(cmdShim, "utf8");
+  const targetMatches = [
+    ...shim.matchAll(/"%dp0%\\([^"]+)"\s+(?:%|\s|$)/gi),
+  ];
+  const relativeTarget = targetMatches.at(-1)?.[1];
+  if (!relativeTarget) return null;
+
+  const target = path.resolve(path.dirname(cmdShim), relativeTarget);
+  if (/\.js$/i.test(target)) {
+    return { command: process.execPath, prefixArgs: [target] };
+  }
+  if (/\.exe$/i.test(target)) {
+    return { command: target, prefixArgs: [] };
+  }
+  return null;
 }
-if (hasOpenCode) {
-  console.log("  OpenCode: opencode mcp list");
+
+function commandExists(command) {
+  return resolveCommand(command) !== null;
 }
-console.log("");
+
+function backupFile(file) {
+  if (!fs.existsSync(file)) return null;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backup = `${file}.backup-${stamp}`;
+  fs.copyFileSync(file, backup);
+  return backup;
+}
+
+function writeJsonWithBackup(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const backup = backupFile(file);
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  if (backup) console.log(`  Backup: ${backup}`);
+}
+
+function deriveApiBase(apiUrl) {
+  const parsed = new URL(apiUrl);
+  const suffix = "/search/dify";
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+  if (!parsed.pathname.endsWith(suffix)) return null;
+  parsed.pathname = parsed.pathname.slice(0, -suffix.length) || "/";
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString().replace(/\/$/, "");
+}
+
+if (hasFlag("--help")) {
+  usage();
+  process.exit(0);
+}
+
+const API_URL = getArg("--api-url");
+if (!API_URL) {
+  usage();
+  fail("--api-url is required");
+}
+
+try {
+  const parsed = new URL(API_URL);
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("unsupported protocol");
+  }
+} catch {
+  fail("--api-url must be an absolute HTTP(S) URL");
+}
+
+const API_BASE = getArg("--api-base") || deriveApiBase(API_URL);
+if (!API_BASE) {
+  fail("--api-base is required when --api-url does not end in /search/dify");
+}
+
+try {
+  const parsed = new URL(API_BASE);
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("unsupported protocol");
+  }
+} catch {
+  fail("--api-base must be an absolute HTTP(S) URL");
+}
+
+const NO_PROXY = getArg("--no-proxy");
+const CODEX_MODE = getArg("--codex-mode") || "direct";
+if (!["direct", "plugin", "both"].includes(CODEX_MODE)) {
+  fail("--codex-mode must be direct, plugin, or both");
+}
+
+if (!fs.existsSync(BUNDLE_FILE)) {
+  fail(`runtime bundle is missing: ${BUNDLE_FILE}. Run npm run build first`);
+}
+
+const HAS_CODEX = !hasFlag("--no-codex") && commandExists("codex");
+const HAS_OPENCODE =
+  !hasFlag("--no-opencode") && commandExists("opencode");
+if (!HAS_CODEX && !HAS_OPENCODE) {
+  fail("neither Codex nor OpenCode was detected or both were skipped");
+}
+
+const runtimeConfigFile = path.join(
+  os.homedir(),
+  ".config",
+  "xinyang-kb",
+  "config.json"
+);
+writeJsonWithBackup(runtimeConfigFile, {
+  searchApiUrl: API_URL,
+  apiServerBaseUrl: API_BASE,
+});
+console.log(`  Runtime config: ${runtimeConfigFile}`);
+
+if (HAS_CODEX) {
+  if (CODEX_MODE === "direct" || CODEX_MODE === "both") {
+    console.log("\nInstalling Codex MCP directly...");
+    run("codex", ["mcp", "remove", "xinyang-kb"], { allowFailure: true });
+    const envArgs = [
+      "--env",
+      `SEARCH_API_URL=${API_URL}`,
+      "--env",
+      `API_SERVER_BASE_URL=${API_BASE}`,
+    ];
+    if (NO_PROXY) envArgs.push("--env", `no_proxy=${NO_PROXY}`);
+    run("codex", [
+      "mcp",
+      "add",
+      "xinyang-kb",
+      ...envArgs,
+      "--",
+      "node",
+      BUNDLE_FILE,
+    ]);
+
+    const skillDir = path.join(
+      os.homedir(),
+      ".codex",
+      "skills",
+      "xinyang-assistant"
+    );
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.copyFileSync(SKILL_SRC, path.join(skillDir, "SKILL.md"));
+    console.log(`  Skill installed: ${skillDir}`);
+  }
+
+  if (CODEX_MODE === "plugin" || CODEX_MODE === "both") {
+    console.log("\nInstalling Codex plugin...");
+    const marketplaces = run(
+      "codex",
+      ["plugin", "marketplace", "list"],
+      { capture: true, allowFailure: true }
+    );
+    if (!marketplaces.includes(PROJECT_DIR)) {
+      run("codex", ["plugin", "marketplace", "add", PROJECT_DIR]);
+    }
+    run(
+      "codex",
+      ["plugin", "remove", "xinyang-kb@xinyang-internal"],
+      { allowFailure: true }
+    );
+    run("codex", ["plugin", "add", "xinyang-kb@xinyang-internal"]);
+  }
+} else if (!hasFlag("--no-codex")) {
+  console.log("\nSKIP: Codex CLI not found");
+}
+
+if (HAS_OPENCODE) {
+  console.log("\nInstalling OpenCode...");
+  const configDir = path.join(os.homedir(), ".config", "opencode");
+  const configFile = path.join(configDir, "opencode.json");
+  let config = { $schema: "https://opencode.ai/config.json", mcp: {} };
+
+  if (fs.existsSync(configFile)) {
+    try {
+      const rawConfig = fs
+        .readFileSync(configFile, "utf8")
+        .replace(/^\uFEFF/, "");
+      config = JSON.parse(rawConfig);
+    } catch (error) {
+      fail(
+        `existing OpenCode config is invalid; it was not modified: ${configFile} (${error.message})`
+      );
+    }
+  }
+
+  if (!config.mcp || typeof config.mcp !== "object") config.mcp = {};
+  const environment = {
+    SEARCH_API_URL: API_URL,
+    API_SERVER_BASE_URL: API_BASE,
+  };
+  if (NO_PROXY) environment.no_proxy = NO_PROXY;
+
+  config.mcp["xinyang-kb"] = {
+    type: "local",
+    command: ["node", BUNDLE_FILE],
+    enabled: true,
+    environment,
+  };
+
+  const instructionDir = path.join(configDir, "skills");
+  const instructionFile = path.join(
+    instructionDir,
+    "xinyang-assistant.md"
+  );
+  fs.mkdirSync(instructionDir, { recursive: true });
+  fs.copyFileSync(SKILL_SRC, instructionFile);
+
+  const instructionRef = path.join("skills", "xinyang-assistant.md");
+  if (!Array.isArray(config.instructions)) config.instructions = [];
+  if (!config.instructions.includes(instructionRef)) {
+    config.instructions.push(instructionRef);
+  }
+
+  writeJsonWithBackup(configFile, config);
+  console.log(`  OpenCode config updated: ${configFile}`);
+  console.log(`  OpenCode skill installed: ${instructionFile}`);
+} else if (!hasFlag("--no-opencode")) {
+  console.log("\nSKIP: OpenCode not found");
+}
+
+console.log("\nInstallation complete. Restart Codex/OpenCode and start a new session.");

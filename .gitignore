@@ -1,2 +1,3 @@
 node_modules/
-dist/
+nodejs/
+plugins/xinyang-kb/dist-types/

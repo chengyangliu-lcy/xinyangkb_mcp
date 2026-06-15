@@ -3,17 +3,19 @@
   "version": "1.0.0",
   "description": "MCP server for Xinyang internal knowledge base search",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "plugins/xinyang-kb/dist/index.js",
   "scripts": {
-    "start": "npx tsx src/index.ts",
-    "build": "npx tsc",
-    "typecheck": "npx tsc --noEmit"
+    "start": "tsx plugins/xinyang-kb/src/index.ts",
+    "build": "esbuild plugins/xinyang-kb/src/index.ts --bundle --platform=node --format=esm --target=node18 --outfile=plugins/xinyang-kb/dist/index.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.15.0"
+    "@modelcontextprotocol/sdk": "^1.15.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.28.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

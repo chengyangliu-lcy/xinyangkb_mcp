@@ -1,0 +1,20 @@
+{
+  "name": "xinyang-internal",
+  "interface": {
+    "displayName": "Xinyang Internal"
+  },
+  "plugins": [
+    {
+      "name": "xinyang-kb",
+      "source": {
+        "source": "local",
+        "path": "./plugins/xinyang-kb"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "name": "xinyang-kb",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "芯阳公司内部知识库 MCP 服务器。提供知识库搜索能力，Codex 可借此查询芯阳内部文档、产品规格、技术方案、公司制度等内部信息。",
   "author": {
     "name": "芯阳公司"

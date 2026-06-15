@@ -1,123 +1,189 @@
-# Xinyang KB MCP Server
+# Xinyang KB MCP
 
-芯阳公司内部知识库 MCP 服务器。封装内部搜索 API，供 **Codex** 和 **OpenCode** 调用。
+芯阳内部知识库 MCP 服务，同时支持 Codex 和 OpenCode。
 
 ## 环境要求
 
-- Node.js >= 18
-- npm
-- Codex 和/或 OpenCode 已安装
+- Node.js 18+
+- Codex CLI 和/或 OpenCode
+- 可访问芯阳内部搜索 API
 
-## 安装
+仓库已提交独立运行产物 `plugins/xinyang-kb/dist/index.js`。使用者安装时不需要执行 `npm install`。
 
-### 一键安装（跨平台，推荐）
+## 一键安装
 
-```bash
-cd /home/music/lcy/mcp
-npm install
-node scripts/install.cjs
-```
-
-脚本自动检测 Codex 和 OpenCode，同时为两者配置 MCP 服务器和技能。
-
-**Windows 用户：** 同样使用 `node scripts/install.cjs` 即可（路径会自动适配）。
-
-### 手动安装
-
-<details>
-<summary><b>Codex CLI</b></summary>
+API 地址必须显式提供：
 
 ```bash
-codex mcp add xinyang-kb \
-  --env SEARCH_API_URL=http://10.24.116.22:5010/search/dify \
-  --env API_SERVER_BASE_URL=http://10.24.116.22:5010 \
-  --env no_proxy=10.24.116.22,59.77.39.46,localhost,127.0.0.1,::1 \
-  -- npx tsx /home/music/lcy/mcp/src/index.ts
-
-mkdir -p ~/.codex/skills/xinyang-assistant
-cp skills/xinyang-assistant/SKILL.md ~/.codex/skills/xinyang-assistant/SKILL.md
+node scripts/install.cjs \
+  --api-url http://YOUR_HOST:5010/search/dify
 ```
-</details>
 
-<details>
-<summary><b>OpenCode</b></summary>
-
-编辑 `~/.config/opencode/opencode.json`（Linux）或 `%APPDATA%/opencode/opencode.json`（Windows）：
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "xinyang-kb": {
-      "type": "local",
-      "command": ["npx", "tsx", "/path/to/mcp/src/index.ts"],
-      "enabled": true,
-      "environment": {
-        "SEARCH_API_URL": "http://10.24.116.22:5010/search/dify",
-        "API_SERVER_BASE_URL": "http://10.24.116.22:5010",
-        "no_proxy": "10.24.116.22,59.77.39.46,localhost,127.0.0.1,::1"
-      }
-    }
-  },
-  "instructions": ["skills/xinyang-assistant.md"]
-}
-```
+当搜索地址不是以 `/search/dify` 结尾时，还必须提供基础地址：
 
 ```bash
-mkdir -p ~/.config/opencode/skills
-cp skills/xinyang-assistant/SKILL.md ~/.config/opencode/skills/xinyang-assistant.md
+node scripts/install.cjs \
+  --api-url http://YOUR_HOST:5010/custom/search \
+  --api-base http://YOUR_HOST:5010
 ```
-</details>
+
+安装器会自动检测 Codex 和 OpenCode，并保留未涉及的现有配置。修改已有 JSON 配置前会生成带时间戳的备份。
+
+可选参数：
+
+| 参数 | 说明 |
+|---|---|
+| `--codex-mode direct` | 直接注册 Codex MCP，默认模式 |
+| `--codex-mode plugin` | 通过本仓库 Marketplace 安装 Codex 插件 |
+| `--codex-mode both` | 同时安装两种 Codex 接入方式 |
+| `--no-codex` | 跳过 Codex |
+| `--no-opencode` | 跳过 OpenCode |
+| `--no-proxy <列表>` | 显式写入 MCP 的 `no_proxy` 环境变量 |
+
+### Windows
+
+```powershell
+.\scripts\install.ps1 --api-url http://YOUR_HOST:5010/search/dify
+```
+
+### Linux / macOS
+
+```bash
+./scripts/install.sh --api-url http://YOUR_HOST:5010/search/dify
+```
+
+## Codex
+
+### 直接注册
+
+默认安装方式。安装器执行 `codex mcp add`，并将 Skill 安装到 `~/.codex/skills/xinyang-assistant`。
+
+```bash
+node scripts/install.cjs \
+  --api-url http://YOUR_HOST:5010/search/dify \
+  --codex-mode direct \
+  --no-opencode
+```
+
+### 插件安装
+
+仓库采用标准 Marketplace 布局：
+
+```text
+.agents/plugins/marketplace.json
+plugins/xinyang-kb/
+```
+
+安装命令：
+
+```bash
+node scripts/install.cjs \
+  --api-url http://YOUR_HOST:5010/search/dify \
+  --codex-mode plugin \
+  --no-opencode
+```
+
+插件同时携带 MCP 和 `xinyang-assistant` Skill。安装完成后请重启 Codex 并新建会话。
+
+## OpenCode
+
+OpenCode 继续使用已验证的配置格式：
+
+- 配置文件：`~/.config/opencode/opencode.json`
+- MCP 类型：`local`
+- 环境字段：`environment`
+- Skill：`~/.config/opencode/skills/xinyang-assistant.md`
+- 指令引用：`skills/xinyang-assistant.md`
+
+仅安装 OpenCode：
+
+```bash
+node scripts/install.cjs \
+  --api-url http://YOUR_HOST:5010/search/dify \
+  --no-codex
+```
+
+安装器会合并已有 JSON，不覆盖其他 MCP、instructions 或用户设置。若原配置不是有效 JSON，安装会停止且不会覆盖文件。
 
 ## 配置
 
-环境变量在安装时已写入配置：
+运行时配置优先级：
 
-| 变量 | 说明 |
-|---|---|
-| `SEARCH_API_URL` | 内部搜索 API 地址 |
-| `API_SERVER_BASE_URL` | API 基础地址（拼接文档 URL） |
-| `no_proxy` | 不走代理的内部地址列表 |
+1. `SEARCH_API_URL`、`API_SERVER_BASE_URL` 环境变量
+2. `~/.config/xinyang-kb/config.json`
 
-如需修改 API 地址，运行：
+插件模式使用用户配置文件；直接注册模式同时注入环境变量。
 
-```bash
-node scripts/install.cjs --api-url http://新IP:5010/search/dify
-```
+## 卸载
 
-## 使用
+### Codex
 
-直接提问芯阳相关问题，AI 助手会自动调用知识库搜索并按规范格式化回答。
-
-```
-你：TM52F1376 的规格参数是什么？
-→ 调用 knowledge_base_search → 结构化回答 + 来源链接
-
-你：离职流程是什么？
-→ 搜索知识库 → 步骤化流程
-
-你：我们的产品和竞品比怎么样？
-→ 同时搜索知识库 + 联网 → 分开标注来源
-```
-
-## 验证
+如果使用 direct 模式安装：
 
 ```bash
-codex mcp list      # Codex
-opencode mcp list   # OpenCode
+codex mcp remove xinyang-kb
 ```
 
-## 目录结构
+然后删除 Skill：
 
-```
-src/index.ts                  MCP 服务器
-skills/xinyang-assistant/     芯阳大模型行为规范
-scripts/install.cjs           跨平台一键安装脚本
+```text
+~/.codex/skills/xinyang-assistant/
 ```
 
-## API 地址变更
+如果使用 plugin 模式安装：
 
 ```bash
-node scripts/install.cjs --api-url http://新IP:5010/search/dify
+codex plugin remove xinyang-kb@xinyang-internal
 ```
-# xinyangkb_mcp
+
+如不再使用本仓库 Marketplace，可继续执行：
+
+```bash
+codex plugin marketplace remove xinyang-internal
+```
+
+`both` 模式需要同时执行 direct 和 plugin 两组卸载操作。
+
+### OpenCode
+
+编辑 `~/.config/opencode/opencode.json`：
+
+1. 删除 `mcp` 中的 `xinyang-kb`。
+2. 删除 `instructions` 中的 `skills/xinyang-assistant.md`。
+
+然后删除：
+
+```text
+~/.config/opencode/skills/xinyang-assistant.md
+```
+
+### 共享运行配置
+
+确认 Codex 和 OpenCode 都不再使用本 MCP 后，可删除：
+
+```text
+~/.config/xinyang-kb/config.json
+```
+
+卸载后重启 Codex 或 OpenCode，并新建会话。
+
+## 开发与验证
+
+```bash
+npm ci
+npm run typecheck
+npm run build
+```
+
+常用检查：
+
+```bash
+codex mcp list
+codex plugin marketplace list
+codex plugin list
+opencode mcp list
+```
+
+## 工具
+
+`knowledge_base_search` 用于搜索芯阳内部产品参数、技术方案、制度、流程、项目和内部文档。返回结果中的内部文档路径会转换为可引用 URL。
